@@ -15,6 +15,8 @@ public class TransactionReconciliationService
 
     public async Task ProcessSnapshotAsync(List<TransactionSnapshotDto> snapshot)
     {
+        var snapshotIds = snapshot.Select(s => s.transactionId).ToHashSet();
+
         foreach (var dto in snapshot)
         {
             var existing = await _db.Transactions
@@ -42,16 +44,18 @@ public class TransactionReconciliationService
             await DetectChanges(existing, dto);
         }
 
+        await HandleRevocations(snapshotIds);
+
         await _db.SaveChangesAsync();
     }
 
     private async Task DetectChanges(Transaction existing, TransactionSnapshotDto dto)
     {
+        var newLast4 = dto.cardNumber[^4..];
+
         CheckChange(existing, "LocationCode", existing.LocationCode, dto.locationCode);
         CheckChange(existing, "ProductName", existing.ProductName, dto.productName);
         CheckChange(existing, "Amount", existing.Amount.ToString(), dto.amount.ToString());
-
-        var newLast4 = dto.cardNumber[^4..];
         CheckChange(existing, "CardLast4", existing.CardLast4, newLast4);
 
         existing.LocationCode = dto.locationCode;
@@ -64,7 +68,7 @@ public class TransactionReconciliationService
         await Task.CompletedTask;
     }
 
-    private void CheckChange(Transaction transaction, string field, string oldValue, string newValue)
+    private void CheckChange(Transaction transaction, string fieldName, string oldValue, string newValue)
     {
         if (oldValue == newValue)
             return;
@@ -72,12 +76,41 @@ public class TransactionReconciliationService
         var audit = new TransactionAudit
         {
             TransactionId = transaction.TransactionId,
-            FieldName = field,
+            FieldName = fieldName,
             OldValue = oldValue,
             NewValue = newValue,
             ChangedAt = DateTime.UtcNow
         };
 
         _db.TransactionAudits.Add(audit);
+    }
+
+    private async Task HandleRevocations(HashSet<string> snapshotIds)
+    {
+        var cutoff = DateTime.UtcNow.AddHours(-24);
+
+        var candidates = await _db.Transactions
+            .Where(t =>
+                t.TransactionTime >= cutoff &&
+                !snapshotIds.Contains(t.TransactionId) &&
+                t.Status != "Revoked")
+            .ToListAsync();
+
+        foreach (var transaction in candidates)
+        {
+            var audit = new TransactionAudit
+            {
+                TransactionId = transaction.TransactionId,
+                FieldName = "Status",
+                OldValue = transaction.Status,
+                NewValue = "Revoked",
+                ChangedAt = DateTime.UtcNow
+            };
+
+            transaction.Status = "Revoked";
+            transaction.UpdatedAt = DateTime.UtcNow;
+
+            _db.TransactionAudits.Add(audit);
+        }
     }
 }
