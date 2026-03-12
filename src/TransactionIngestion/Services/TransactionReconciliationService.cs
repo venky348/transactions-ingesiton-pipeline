@@ -46,6 +46,8 @@ public class TransactionReconciliationService
 
         await HandleRevocations(snapshotIds);
 
+        await HandleFinalization();
+
         await _db.SaveChangesAsync();
     }
 
@@ -108,6 +110,34 @@ public class TransactionReconciliationService
             };
 
             transaction.Status = "Revoked";
+            transaction.UpdatedAt = DateTime.UtcNow;
+
+            _db.TransactionAudits.Add(audit);
+        }
+    }
+
+    private async Task HandleFinalization()
+    {
+        var cutoff = DateTime.UtcNow.AddHours(-24);
+
+        var candidates = await _db.Transactions
+            .Where(t =>
+                t.TransactionTime < cutoff &&
+                t.Status != "Finalized")
+            .ToListAsync();
+
+        foreach (var transaction in candidates)
+        {
+            var audit = new TransactionAudit
+            {
+                TransactionId = transaction.TransactionId,
+                FieldName = "Status",
+                OldValue = transaction.Status,
+                NewValue = "Finalized",
+                ChangedAt = DateTime.UtcNow
+            };
+
+            transaction.Status = "Finalized";
             transaction.UpdatedAt = DateTime.UtcNow;
 
             _db.TransactionAudits.Add(audit);
