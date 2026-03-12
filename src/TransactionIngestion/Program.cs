@@ -25,6 +25,7 @@ services.AddDbContext<AppDbContext>(options =>
 });
 
 services.AddSingleton<TransactionSnapshotService>();
+services.AddScoped<TransactionReconciliationService>();
 
 var serviceProvider = services.BuildServiceProvider();
 
@@ -32,6 +33,7 @@ using var scope = serviceProvider.CreateScope();
 
 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 var snapshotService = scope.ServiceProvider.GetRequiredService<TransactionSnapshotService>();
+var reconciliationService = scope.ServiceProvider.GetRequiredService<TransactionReconciliationService>();
 
 db.Database.EnsureCreated();
 
@@ -40,3 +42,7 @@ Console.WriteLine("Database initialized.");
 var snapshot = await snapshotService.GetSnapshotAsync();
 
 Console.WriteLine($"Loaded {snapshot.Count} transactions from snapshot.");
+
+await reconciliationService.ProcessSnapshotAsync(snapshot);
+
+Console.WriteLine("Snapshot processed successfully.");
