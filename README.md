@@ -99,7 +99,7 @@ Passed! 4 tests
 
 ## Configuration
 
-Configuration is stored in\*\* \*\*`appsettings.json`.
+Configuration is stored in `appsettings.json`.
 
 Example:
 
@@ -129,7 +129,7 @@ Example:
 
 The ingestion job is idempotent because:
 
-- Transactions are uniquely identified by\*\* \*\*`TransactionId`
+- Transactions are uniquely identified by `TransactionId`
 - Updates are only recorded when values change
 - Revoked transactions are not revoked again
 - Finalized transactions are immutable
@@ -138,9 +138,9 @@ The ingestion job is idempotent because:
 
 ## Estimated vs Actual Time
 
-Estimated time:** \*\***6 hours\*\*
+Estimated time: `6 hours`
 
-Actual time spent:** \*\***7–8 hours\*\*
+Actual time spent: `7–8 hours`
 
 Breakdown:
 
